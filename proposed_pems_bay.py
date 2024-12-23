@@ -9,6 +9,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 #from fancyimpute import SoftImpute
 from sklearn.impute import KNNImputer
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.layers import Conv1D, BatchNormalization, Activation, SpatialDropout1D, Add
+from tensorflow.keras.layers import Dense, LayerNormalization
 import random
 
 seed = 42
@@ -18,21 +20,20 @@ tf.random.set_seed(seed)
 # Load the PEMS-BAY dataset
 def load_data(filepath):
     data = pd.read_csv(filepath)
-    data = data[:25000]
     data.drop(columns=['date_time'], inplace=True)
-    #data.drop(columns=['date_time'], inplace=True)
-    # Handle missing values if necessary (e.g., fill forward/backward)
+    
+    # Handle missing values if necessary
     data.fillna(method='ffill', inplace=True)
     data.interpolate(method='linear', inplace=True)
     return data.values
 
-# Preprocess the data: Scaling, converting to numpy array
+# Preprocessing
 def preprocess_data(data):
     scaler = MinMaxScaler(feature_range=(0, 1))
     data_scaled = scaler.fit_transform(data)
     return data_scaled, scaler
 
-# Create windows for input-output pairs (for multi-step time series forecasting)
+# Creating windows
 def create_sequences(data, input_steps, output_steps):
     X, y = [], []
     for i in range(len(data) - input_steps - output_steps):
@@ -40,24 +41,25 @@ def create_sequences(data, input_steps, output_steps):
         y.append(data[(i + input_steps):(i + input_steps + output_steps), :])
     return np.array(X), np.array(y)
 
-# Split the data into training, validation, and testing sets
+# Data spliting
 def split_data(X, y, test_size=0.2, val_size=0.1):
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=test_size)
     X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=val_size/(test_size + val_size))
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-# Load the PEMS_BAY dataset
-filepath = 'PEMS_BAY.csv'  # Update to your dataset path
+# Load the dataset
+filepath = 'PEMS_BAY.csv'
 
 data = load_data(filepath)
 
 input_steps = 24
 output_steps = 24
-# Create sequences for multi-step forecasting
+
+# Creating sequences
 X, y = create_sequences(data, input_steps=input_steps, output_steps=output_steps)
     
-# Split the data into training, validation, and test sets
+# Spliting data
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
     
 scaler = MinMaxScaler(feature_range=(0, 1))
@@ -171,16 +173,12 @@ class SpatioTemporalPositionalEncoding(tf.keras.layers.Layer):
         # Add positional encoding to the input tensor
         return x + spatio_temporal_encoding
 
-
-
-
 # Mask creation for padding
 def create_padding_mask(seq):
     seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
     return seq[:, tf.newaxis, tf.newaxis, :]
 
-# Transformer Encoder Layer
-   
+# Encoder Layer   
 def encoder_layer(units, d_model, num_heads, dropout, name="encoder_layer"):
     inputs = tf.keras.Input(shape=(time_steps, num_features), name="inputs")
     padding_mask = tf.keras.Input(shape=(1, 1, None), name="padding_mask")
@@ -240,7 +238,7 @@ class DynamicFeatureEmbedding(tf.keras.layers.Layer):
                 x = self.dropout(x, training=training)
         return x
 
-def custom_loss(y_true, y_pred):
+def hybrid_loss(y_true, y_pred):
     mse = tf.keras.losses.MeanSquaredError()(y_true, y_pred)
     mae = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred)
     return mse + 0.5 * mae
@@ -250,8 +248,6 @@ lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
     first_decay_steps=1000,
     alpha=1e-4
 )
-
-from tensorflow.keras.layers import Conv1D, BatchNormalization, Activation, SpatialDropout1D, Add
 
 def temporal_block(x, num_filters, kernel_size, dilation_rate, dropout):
     skip_connection = x  # Preserve input for the residual connection
@@ -264,9 +260,6 @@ def temporal_block(x, num_filters, kernel_size, dilation_rate, dropout):
         skip_connection = Conv1D(filters=num_filters, kernel_size=1, padding='same')(skip_connection)
     out = Add()([out, skip_connection])  # Combine output and skip connection
     return Activation('relu')(out)
-
-import tensorflow as tf
-from tensorflow.keras.layers import Dense, LayerNormalization, Add, Activation
 
 class DeepProjectionLayer(tf.keras.layers.Layer):
     def __init__(self, d_model, num_hidden, dropout_rate=0.1):
@@ -306,7 +299,7 @@ class DeepProjectionLayer(tf.keras.layers.Layer):
 
         return x
 
-# Complete Transformer Model
+# Model
 def transformer(time_steps, d_model, num_heads, num_layers, units, dropout, output_size):
     input_shape = (time_steps, num_features)
     inputs = tf.keras.Input(shape=input_shape, name="inputs")
@@ -340,7 +333,7 @@ def transformer(time_steps, d_model, num_heads, num_layers, units, dropout, outp
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
 
-# Initialize the model
+# Initializing the model
 d_model = num_features
 num_heads = 25
 num_layers = 1
@@ -351,30 +344,27 @@ output_size = num_features
 time_steps = 24
 
 
-# Build the model
+# Building the model
 best_model = transformer(time_steps,d_model=d_model,num_heads=num_heads,num_layers=num_layers,units=units,dropout=dropout,output_size=output_size)
 
 # Compile the model
-best_model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning_rate=learning_rate),metrics=[tf.keras.metrics.MeanAbsoluteError()])
+best_model.compile(loss=hybrid_loss,optimizer=tf.keras.optimizers.Nadam(learning_rate=learning_rate),metrics=[tf.keras.metrics.MeanAbsoluteError()])
 best_model.summary()
 
-early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=15, mode='min')
-mc = tf.keras.callbacks.ModelCheckpoint('time_series_data/trial_proposed_pem_bay_24.weights.h5', monitor='val_mean_absolute_error', verbose=5, save_best_only=True, 
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=10, mode='min')
+mc = tf.keras.callbacks.ModelCheckpoint('proposed_pems_bay_24.weights.h5', monitor='val_mean_absolute_error', verbose=5, save_best_only=True, 
           mode='min', save_weights_only=True)
 
-#history = best_model.fit(X_train_scaled, y_train_scaled, validation_data=(X_val_scaled, y_val_scaled),epochs=150,batch_size=32,callbacks=[mc, early_stopping])
+history = best_model.fit(X_train_scaled, y_train_scaled, validation_data=(X_val_scaled, y_val_scaled), epochs=100,batch_size=32,callbacks=[mc, early_stopping])
 
 # Save training history
 #df_h = pd.DataFrame.from_dict(history.history)
 #df_h.to_csv('time_series_data/trial_proposed_pem_bay_24.csv')
 
 # Load model
-best_model.load_weights('time_series_data/trial_proposed_pem_bay_24.weights.h5')
+best_model.load_weights('proposed_pems_bay_24.weights.h5')
 
-#best_model.evaluate(test_inputs, test_labels)
-
-
-# Define evaluation functions (MAE, RMSE)
+# Define evaluation function
 def evaluate_model(model, x_test, y_test):
     y_pred = model.predict(x_test)
     mae = mean_absolute_error(y_test.flatten(), y_pred.flatten())
@@ -385,12 +375,11 @@ def evaluate_model(model, x_test, y_test):
 mae, rmse = evaluate_model(best_model, X_test_scaled, y_test_scaled)
 print(f"Test MAE: {mae:.4f}, Test RMSE: {rmse:.4f}")
 
+# Plotting
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Assuming `y_test_scaled` and `X_test_scaled` have shape [samples, timesteps, sensors]
-# And `scaler` was fitted with 2D data [total_samples, sensors]
-num_features = y_test_scaled.shape[-1]  # Number of sensors (features)
+num_features = y_test_scaled.shape[-1]  
 
 # Reshape to 2D for inverse transform
 y_test_scaled_reshaped = y_test_scaled.reshape(-1, num_features)
@@ -405,11 +394,7 @@ true_values = true_values.reshape(y_test_scaled.shape)
 predicted_values = predicted_values.reshape(y_test_scaled.shape)
 
 # Sensors to plot (update indices based on your dataset's columns)
-sensor_indices = [13, 5, 7, 11]  # Replace with specific sensor indices
-
-# Plot for each sensor
-import matplotlib.pyplot as plt
-import numpy as np
+sensor_indices = [13, 5, 7, 11]  # Randomly selected
 
 # Plot for each sensor
 annotations = ['(a)', '(b)', '(c)', '(d)']  # Annotations for each subplot
@@ -422,7 +407,7 @@ for i, sensor_idx in enumerate(sensor_indices):
         predicted_values[:, 0, sensor_idx],
         color='blue',
         alpha=0.7,
-        s=5  # Adjust the marker size (smaller dots)
+        s=5  
     )
     plt.plot(
         [np.min(true_values[:, 0, sensor_idx]), np.max(true_values[:, 0, sensor_idx])],
@@ -437,14 +422,6 @@ for i, sensor_idx in enumerate(sensor_indices):
 
 plt.tight_layout()  # Adjust layout for better viewing
 plt.show()
-
-
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-
-# Disable external LaTeX, but keep math text rendering
-rcParams['text.usetex'] = False  # Use mathtext instead of full LaTeX
-rcParams['mathtext.fontset'] = 'cm'  # Use Computer Modern, the default LaTeX font
 
 # Assuming sensor_indices, true_values, predicted_values, and annotations are defined
 for i, sensor_idx in enumerate(sensor_indices):
@@ -469,34 +446,14 @@ for i, sensor_idx in enumerate(sensor_indices):
 plt.tight_layout()  # Adjust layout for better viewing
 plt.show()
 
-import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-
-# Define evaluation functions (MAE, RMSE)
-def evaluate_model(model, x_test, y_test):
-    """
-    Evaluate the model on the given test set using MAE and RMSE.
-    """
-    y_pred = model.predict(x_test)
-    mae = mean_absolute_error(y_test.flatten(), y_pred.flatten())
-    rmse = np.sqrt(mean_squared_error(y_test.flatten(), y_pred.flatten()))
-    return mae, rmse
-
 # Function to add noise to the dataset
 def add_noise(data, noise_level):
-    """
-    Add random noise to the data based on the specified noise level.
-    The noise level should be between 0 (no noise) and 1 (maximum noise).
-    """
     noise = np.random.normal(0, noise_level, data.shape)  # Gaussian noise
     noisy_data = data + noise
     return noisy_data
 
 # Evaluate the model on the test set with various noise levels
 def evaluate_with_noise(model, X_test, y_test, noise_levels):
-    """
-    Evaluate the model's performance at various noise levels.
-    """
     results = {}
     for noise_level in noise_levels:
         # Add noise to both input and output data
@@ -512,65 +469,14 @@ def evaluate_with_noise(model, X_test, y_test, noise_levels):
     
     return results
 
-# Example noise levels (can adjust as needed)
+# noise levels
 noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
 
 # Evaluate the model on the test set with various noise levels
 results = evaluate_with_noise(best_model, X_test_scaled, y_test_scaled, noise_levels)
 
-# Optionally, plot the results
-import matplotlib.pyplot as plt
-
-# Plot the performance (MAE and RMSE) as a function of noise level
-mae_values = [results[noise]['MAE'] for noise in noise_levels]
-rmse_values = [results[noise]['RMSE'] for noise in noise_levels]
-
-plt.figure(figsize=(10, 5))
-plt.subplot(1, 2, 1)
-plt.plot(noise_levels, mae_values, marker='o', label='MAE')
-plt.xlabel('Noise Level')
-plt.ylabel('MAE')
-plt.title('Model Performance with Different Noise Levels')
-plt.grid(True)
-
-plt.subplot(1, 2, 2)
-plt.plot(noise_levels, rmse_values, marker='o', label='RMSE', color='red')
-plt.xlabel('Noise Level')
-plt.ylabel('RMSE')
-plt.title('Model Performance with Different Noise Levels')
-plt.grid(True)
-
-plt.tight_layout()
-plt.show()
-
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from matplotlib import rcParams
-
-# Disable external LaTeX, but keep math text rendering
-rcParams['text.usetex'] = False  # Use mathtext instead of full LaTeX
-rcParams['mathtext.fontset'] = 'cm'  # Use Computer Modern, the default LaTeX font
-
-# Define evaluation functions (MAE, RMSE)
-def evaluate_model(model, x_test, y_test):
-    """
-    Evaluate the model on the given test set using MAE and RMSE.
-    """
-    y_pred = model.predict(x_test)
-    mae = mean_absolute_error(y_test.flatten(), y_pred.flatten())
-    rmse = np.sqrt(mean_squared_error(y_test.flatten(), y_pred.flatten()))
-    return mae, rmse
-
 # Function to simulate sudden increase and decrease in traffic flow
 def simulate_traffic_changes(data, increase_idx, decrease_idx, increase_factor=1.5, decrease_factor=0.5):
-    """
-    Simulate sudden traffic flow changes (increase and decrease) at specified indices.
-    - increase_idx: Index where the traffic flow will increase
-    - decrease_idx: Index where the traffic flow will decrease
-    - increase_factor: Factor by which the traffic will increase
-    - decrease_factor: Factor by which the traffic will decrease
-    """
     data_copy = data.copy()
     
     # Simulate sudden increase (at 'increase_idx' index)
@@ -581,7 +487,7 @@ def simulate_traffic_changes(data, increase_idx, decrease_idx, increase_factor=1
     
     return data_copy
 
-# Example: Indices for increase and decrease
+# Indices for increase and decrease
 increase_idx = [50, 100, 150]  # Choose an index for the increase
 decrease_idx = [75, 175, 200]  # Choose an index for the decrease
 
@@ -591,32 +497,3 @@ noisy_traffic_data = simulate_traffic_changes(X_test_scaled, increase_idx, decre
 # Evaluate the model before and after the changes
 mae_before, rmse_before = evaluate_model(best_model, X_test_scaled, y_test_scaled)
 mae_after, rmse_after = evaluate_model(best_model, noisy_traffic_data, y_test_scaled)
-
-print(f"Before Change => Test MAE: {mae_before:.4f}, Test RMSE: {rmse_before:.4f}")
-print(f"After Change => Test MAE: {mae_after:.4f}, Test RMSE: {rmse_after:.4f}")
-
-# Plotting the traffic flow before and after the sudden changes
-plt.figure(figsize=(12, 6))
-
-# Extract data for the first sensor (e.g., the first feature or sensor in X_test_scaled)
-# Assuming X_test_scaled has shape (250, 24, 325), so we select the first sensor (index 0)
-plt.plot(X_test_scaled[:250, 0, 0], label='Original Traffic Speed', color='blue')
-
-# Plot the traffic data after the sudden increase and decrease
-plt.plot(noisy_traffic_data[:250, 0, 0], label='Traffic Speed with Changes', linestyle='--', color='red')
-
-# Highlight the sudden increase and decrease points
-plt.scatter(increase_idx, noisy_traffic_data[increase_idx, 0, 0], color='green', label='Sudden Increase', zorder=5)
-plt.scatter(decrease_idx, noisy_traffic_data[decrease_idx, 0, 0], color='orange', label='Sudden Decrease', zorder=5)
-
-# Adding labels and title
-#plt.title('Traffic Flow with Sudden Increase and Decrease')
-plt.xlabel('Time Step')
-plt.ylabel('Traffic Speed')
-plt.legend()
-plt.grid(True)
-
-# Show the plot
-plt.show()
-
-
