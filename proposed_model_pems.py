@@ -2,23 +2,21 @@ import tensorflow as tf
 import pandas as pd
 import numpy as np
 import datetime
-from tensorflow.keras.layers import Conv1D, BatchNormalization, Activation, SpatialDropout1D, Add, Dense, LayerNormalization
-from keras.regularizers import l2
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 import random
+import tensorflow as tf
+from tensorflow.keras.layers import Dense, Conv1D, BatchNormalization, LayerNormalization, Activation, SpatialDropout1D, Add
 
 seed = 42
 np.random.seed(seed)
 tf.random.set_seed(seed)
 
-# Load the PEMS-BAY dataset
+# Load dataset function
 def load_data(filepath):
     data = pd.read_csv(filepath)
-    #data = data[:25000]
     data.drop(columns=['date_hour'], inplace=True)
-    #data.drop(columns=['date_time'], inplace=True)
     # Handle missing values if necessary (e.g., fill forward/backward)
     data.fillna(method='ffill', inplace=True)
     data.interpolate(method='linear', inplace=True)
@@ -31,13 +29,20 @@ def preprocess_data(data):
     return data_scaled, scaler
 
 # Create windows for input-output pairs (for multi-step time series forecasting)
-def create_sequences(data, input_steps, output_steps):
+def create_sequences_old(data, input_steps, output_steps):
     X, y = [], []
     for i in range(len(data) - input_steps - output_steps):
         X.append(data[i:(i + input_steps), :])
         y.append(data[(i + input_steps):(i + input_steps + output_steps), :])
     return np.array(X), np.array(y)
 
+def create_sequences(data, input_steps, output_steps, stride=1):
+    X, y = [], []
+    for i in range(0, len(data) - input_steps - output_steps, stride):  # Note: stride
+        X.append(data[i:(i + input_steps)])
+        y.append(data[(i + input_steps):(i + input_steps + output_steps)])
+    return np.array(X), np.array(y)
+    
 # Split the data into training, validation, and testing sets
 def split_data(X, y, test_size=0.2, val_size=0.1):
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=test_size)
@@ -78,6 +83,65 @@ X_test_scaled = scaler.transform(X_test_reshaped).reshape(X_test.shape)
 y_train_scaled = scaler.transform(y_train_reshaped).reshape(y_train.shape)
 y_val_scaled = scaler.transform(y_val_reshaped).reshape(y_val.shape)
 y_test_scaled = scaler.transform(y_test_reshaped).reshape(y_test.shape)
+
+def augment_time_series(data, augmentation_factor=2, noise_level=0.01):
+    """
+    Augment time series data by adding noise to generate synthetic samples.
+
+    Parameters:
+    - data: Array of original data (num_samples, time_steps, num_features).
+    - augmentation_factor: Number of augmented samples to generate per original sample.
+    - noise_level: Standard deviation of the Gaussian noise to add.
+
+    Returns:
+    - augmented_data: Array containing original and augmented data.
+    """
+    augmented_data = []
+    
+    for sample in data:
+        augmented_data.append(sample)  # Include the original sample
+        
+        # Generate synthetic samples
+        for _ in range(augmentation_factor):
+            noise = np.random.normal(loc=0.0, scale=noise_level, size=sample.shape)
+            augmented_sample = sample + noise
+            augmented_data.append(augmented_sample)
+    
+    return np.array(augmented_data)
+
+# Apply data augmentation
+augmentation_factor = 2  # Generate 2 augmented samples per original sample
+noise_level = 0.01       # Adjust noise level as needed
+
+# Augment training data only
+X_train_scaled = augment_time_series(X_train_scaled, augmentation_factor, noise_level)
+y_train_scaled = np.repeat(y_train_scaled, augmentation_factor + 1, axis=0)
+
+X_val_scaled = augment_time_series(X_val_scaled, augmentation_factor, noise_level)
+y_val_scaled = np.repeat(y_val_scaled, augmentation_factor + 1, axis=0)
+
+X_test_scaled = augment_time_series(X_test_scaled, augmentation_factor, noise_level)
+y_test_scaled = np.repeat(y_test_scaled, augmentation_factor + 1, axis=0)
+
+
+# Print the shapes of the processed data
+print(f"Train Inputs Shape: {X_train_scaled.shape}")  # (num_samples, input_steps, num_features)
+print(f"Train Labels Shape: {y_train_scaled.shape}")  # (num_samples, output_steps, num_targets)
+print(f"Validation Inputs Shape: {X_val_scaled.shape}")
+print(f"Validation Labels Shape: {y_val_scaled.shape}")
+print(f"Test Inputs Shape: {X_test_scaled.shape}")
+print(f"Test Labels Shape: {y_test_scaled.shape}")
+
+# Attention Components
+def scaled_dot_product_attention2(query, key, value, mask=None):
+    matmul_qk = tf.matmul(query, key, transpose_b=True)
+    depth = tf.cast(tf.shape(key)[-1], tf.float32)
+    logits = matmul_qk / tf.math.sqrt(depth)
+    if mask is not None:
+        logits += (mask * -1e9)
+    attention_weights = tf.nn.softmax(logits, axis=-1)
+    attention_weights = tf.keras.layers.Dropout(rate=dropout)(attention_weights)
+    return tf.matmul(attention_weights, value)
 
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, d_model, num_heads, dropout=0.1, name="multi_head_attention"):
@@ -126,6 +190,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         concat_attention = tf.reshape(scaled_attention, (batch_size, -1, self.d_model))
         return self.dense(concat_attention)
 
+# STPE layer
 class SpatioTemporalPositionalEncoding(tf.keras.layers.Layer):
     def __init__(self, num_sensors, d_model, time_steps):
         super(SpatioTemporalPositionalEncoding, self).__init__()
@@ -181,7 +246,8 @@ def create_padding_mask(seq):
     seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
     return seq[:, tf.newaxis, tf.newaxis, :]
 
-# Encoder Layer   
+# Encoder Layer
+   
 def encoder_layer(units, d_model, num_heads, dropout, name="encoder_layer"):
     inputs = tf.keras.Input(shape=(time_steps, num_features), name="inputs")
     padding_mask = tf.keras.Input(shape=(1, 1, None), name="padding_mask")
@@ -253,6 +319,7 @@ lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
     alpha=1e-4
 )
 
+# TCN Block
 def temporal_block(x, num_filters, kernel_size, dilation_rate, dropout):
     skip_connection = x  # Preserve input for the residual connection
     out = Conv1D(filters=num_filters, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='causal')(x)
@@ -265,6 +332,7 @@ def temporal_block(x, num_filters, kernel_size, dilation_rate, dropout):
     out = Add()([out, skip_connection])  # Combine output and skip connection
     return Activation('relu')(out)
 
+# DLP layer
 class DeepProjectionLayer(tf.keras.layers.Layer):
     def __init__(self, d_model, num_hidden, dropout_rate=0.1):
         super(DeepProjectionLayer, self).__init__()
@@ -303,7 +371,7 @@ class DeepProjectionLayer(tf.keras.layers.Layer):
 
         return x
 
-# Complete Transformer Model
+# Final Model
 def transformer(time_steps, d_model, num_heads, num_layers, units, dropout, output_size):
     input_shape = (time_steps, num_features)
     inputs = tf.keras.Input(shape=input_shape, name="inputs")
@@ -332,12 +400,17 @@ def transformer(time_steps, d_model, num_heads, num_layers, units, dropout, outp
     x = temporal_block(x, num_filters=units, kernel_size=3, dilation_rate=1, dropout=dropout)
     x = tf.keras.layers.Dropout(rate=dropout)(x)
     x = tf.keras.layers.Dense(units=units, activation='relu', kernel_regularizer=l2(0.01))(x)
-    outputs = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(output_size))(x)
+    outputs = tf.keras.layers.TimeDistributed(
+        tf.keras.layers.Dense(
+            output_size,
+            bias_initializer=tf.keras.initializers.Constant(0.0)  # Initialize to neutral
+        )
+    )(x)
     
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
 
-# Initialize the model
+# Initialize the model # 3 & 2 best
 d_model = num_features
 num_heads = 3
 num_layers = 2
@@ -355,14 +428,18 @@ best_model = transformer(time_steps,d_model=d_model,num_heads=num_heads,num_laye
 best_model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning_rate=learning_rate),metrics=[tf.keras.metrics.MeanAbsoluteError()])
 best_model.summary()
 
-early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=10, mode='min')
-mc = tf.keras.callbacks.ModelCheckpoint('proposed_pems_24.keras', monitor='val_mean_absolute_error', verbose=10, save_best_only=True, mode='min')
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=7, mode='min')
+mc = tf.keras.callbacks.ModelCheckpoint('model.keras', monitor='val_mean_absolute_error', verbose=10, save_best_only=True, 
+          mode='min') #, save_weights_only=True)
 
-history = best_model.fit(X_train_scaled, y_train_scaled, validation_data=(X_val_scaled, y_val_scaled),epochs=150,batch_size=32,callbacks=[mc, early_stopping])
+#history = best_model.fit(X_train_scaled, y_train_scaled, validation_data=(X_val_scaled, y_val_scaled),epochs=150,batch_size=32,callbacks=[mc, early_stopping])
 
 # Save training history
-df_h = pd.DataFrame.from_dict(history.history)
-df_h.to_csv('proposed_24.csv')
+#df_h = pd.DataFrame.from_dict(history.history)
+#df_h.to_csv('model_his.csv')
+
+# Load model
+best_model.load_weights('model.keras')
 
 # Define evaluation functions (MAE, RMSE)
 def evaluate_model(model, x_test, y_test):
