@@ -4,8 +4,8 @@ Data augmentation was only applied to transformed_data.csv; PEMS-BAY and METR-LA
 
 
 # Requirements
-numpy                             1.26.4
-pandas                            2.2.2
+numpy                             1.26.4;
+pandas                            2.2.2;
 tensorflow                        2.19.0
 
 
