@@ -1,6 +1,7 @@
 # Spatial-Temporal Robust Multi-step Traffic State Prediction
 This repository presents a ''Long-Term Multi-Intersection Traffic State Prediction Using Attention Mechanism and Residual Temporal Convolutional Networks''.
-Data augmentation was only applied to transformed_data.csv; PEMS-BAY and METR-LA do not require it
+
+# Data augmentation was only applied to transformed_data.csv; PEMS-BAY and METR-LA do not require it
 
 
 # Requirements
