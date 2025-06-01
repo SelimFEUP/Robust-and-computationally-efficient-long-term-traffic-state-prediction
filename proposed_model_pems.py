@@ -29,13 +29,6 @@ def preprocess_data(data):
     return data_scaled, scaler
 
 # Create windows for input-output pairs (for multi-step time series forecasting)
-def create_sequences_old(data, input_steps, output_steps):
-    X, y = [], []
-    for i in range(len(data) - input_steps - output_steps):
-        X.append(data[i:(i + input_steps), :])
-        y.append(data[(i + input_steps):(i + input_steps + output_steps), :])
-    return np.array(X), np.array(y)
-
 def create_sequences(data, input_steps, output_steps, stride=1):
     X, y = [], []
     for i in range(0, len(data) - input_steps - output_steps, stride):  # Note: stride
@@ -84,20 +77,10 @@ y_train_scaled = scaler.transform(y_train_reshaped).reshape(y_train.shape)
 y_val_scaled = scaler.transform(y_val_reshaped).reshape(y_val.shape)
 y_test_scaled = scaler.transform(y_test_reshaped).reshape(y_test.shape)
 
+# augmentation_factor: Number of augmented samples to generate per original sample.
+# noise_level: Standard deviation of the Gaussian noise to add.
 def augment_time_series(data, augmentation_factor=2, noise_level=0.01):
-    """
-    Augment time series data by adding noise to generate synthetic samples.
-
-    Parameters:
-    - data: Array of original data (num_samples, time_steps, num_features).
-    - augmentation_factor: Number of augmented samples to generate per original sample.
-    - noise_level: Standard deviation of the Gaussian noise to add.
-
-    Returns:
-    - augmented_data: Array containing original and augmented data.
-    """
-    augmented_data = []
-    
+    augmented_data = []    
     for sample in data:
         augmented_data.append(sample)  # Include the original sample
         
@@ -105,8 +88,7 @@ def augment_time_series(data, augmentation_factor=2, noise_level=0.01):
         for _ in range(augmentation_factor):
             noise = np.random.normal(loc=0.0, scale=noise_level, size=sample.shape)
             augmented_sample = sample + noise
-            augmented_data.append(augmented_sample)
-    
+            augmented_data.append(augmented_sample)    
     return np.array(augmented_data)
 
 # Apply data augmentation
@@ -426,7 +408,7 @@ best_model = transformer(time_steps,d_model=d_model,num_heads=num_heads,num_laye
 
 # Compile the model
 best_model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning_rate=learning_rate),metrics=[tf.keras.metrics.MeanAbsoluteError()])
-best_model.summary()
+#best_model.summary()
 
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=7, mode='min')
 mc = tf.keras.callbacks.ModelCheckpoint('model.keras', monitor='val_mean_absolute_error', verbose=10, save_best_only=True, 
