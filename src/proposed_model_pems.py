@@ -44,7 +44,7 @@ def split_data(X, y, test_size=0.2, val_size=0.1):
 
 
 # Load the dataset
-filepath = 'transformed_data.csv'  # Update to your dataset path
+filepath = 'data/transformed_data.csv'  # Update to your dataset path
 data = load_data(filepath)
 
 input_steps = 24
@@ -411,17 +411,17 @@ best_model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning
 #best_model.summary()
 
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_mean_absolute_error', patience=7, mode='min')
-mc = tf.keras.callbacks.ModelCheckpoint('model.keras', monitor='val_mean_absolute_error', verbose=10, save_best_only=True, 
+mc = tf.keras.callbacks.ModelCheckpoint('models/model.keras', monitor='val_mean_absolute_error', verbose=10, save_best_only=True, 
           mode='min') #, save_weights_only=True)
 
 #history = best_model.fit(X_train_scaled, y_train_scaled, validation_data=(X_val_scaled, y_val_scaled),epochs=150,batch_size=32,callbacks=[mc, early_stopping])
 
 # Save training history
 #df_h = pd.DataFrame.from_dict(history.history)
-#df_h.to_csv('model_his.csv')
+#df_h.to_csv('models/model_his.csv')
 
 # Load model
-best_model.load_weights('model.keras')
+best_model.load_weights('models/model.keras')
 
 # Define evaluation functions (MAE, RMSE)
 def evaluate_model(model, x_test, y_test):
