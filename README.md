@@ -5,9 +5,7 @@ This repository presents a ''Long-Term Multi-Intersection Traffic State Predicti
 Data augmentation was only applied to transformed_data.csv; PEMS-BAY and METR-LA do not require it.
 
 
-# Requirements
-numpy                             1.26.4;
-pandas                            2.2.2;
-tensorflow                        2.19.0
+# Usage
+From the terminal run 'python3 ./src/proposed_model_pems.py'
 
 
