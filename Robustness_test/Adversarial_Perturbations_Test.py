@@ -44,7 +44,7 @@ def split_data(X, y, test_size=0.2, val_size=0.1):
 
 
 # Load the dataset
-filepath = 'transformed_data.csv'  # Update to your dataset path
+filepath = 'data/transformed_data.csv'  # Update to your dataset path
 data = load_data(filepath)
 
 input_steps = 24
@@ -351,7 +351,7 @@ best_model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning
 #best_model.summary()
 
 # Load model
-best_model.load_weights('model_pems_24.keras')
+best_model.load_weights('models/model.keras')
 
 # Adversarial Test
 def adversarial_test(model, X_test, y_test, epsilon=0.10):
