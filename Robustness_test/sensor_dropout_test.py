@@ -23,5 +23,6 @@ def sensor_dropout_test(model, X_test_scaled, y_test_scaled, p_drop=0.1):
     mae, rmse = evaluate_model(model, X_corrupted, y_test_scaled)
     print(f"With {p_drop*100:.0f}% sensor dropout prob: MAE={mae:.4f}, RMSE={rmse:.4f}")
     return mae, rmse
-# best_model, X_test_scaled, y_test_scaled are the saved model, X_test and y_test of your dataset 
-sensor_dropout_test(best_model, X_test_scaled, y_test_scaled)
+    
+# model, X_test_scaled, y_test_scaled are the saved model, X_test and y_test of your dataset 
+sensor_dropout_test(model, X_test_scaled, y_test_scaled)
