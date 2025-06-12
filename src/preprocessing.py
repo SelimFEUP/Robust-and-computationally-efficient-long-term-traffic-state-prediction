@@ -88,8 +88,12 @@ noise_level = 0.01       # Adjust noise level as needed
 def load_data():
     X_train_scaled_a = augment_time_series(X_train_scaled, augmentation_factor, noise_level)
     y_train_scaled_a = np.repeat(y_train_scaled, augmentation_factor + 1, axis=0)
-    X_val_scaled_a = augment_time_series(X_val_scaled, augmentation_factor, noise_level)
-    y_val_scaled_a = np.repeat(y_val_scaled, augmentation_factor + 1, axis=0)
-    X_test_scaled_a = augment_time_series(X_test_scaled, augmentation_factor, noise_level)
-    y_test_scaled_a = np.repeat(y_test_scaled, augmentation_factor + 1, axis=0)
+    
+    # Do NOT augment validation and test sets
+    X_val_scaled_a = X_val_scaled
+    y_val_scaled_a = y_val_scaled
+    X_test_scaled_a = X_test_scaled
+    y_test_scaled_a = y_test_scaled
+    
     return X_train_scaled_a, y_train_scaled_a, X_val_scaled_a, y_val_scaled_a, X_test_scaled_a, y_test_scaled_a
+
