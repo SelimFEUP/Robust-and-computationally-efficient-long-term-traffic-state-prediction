@@ -9,10 +9,11 @@ Data augmentation was only applied to the PEMS dataset; PEMS-BAY and METR-LA do 
 
 
 # Usage
-<pre> To train and evaluate the model, from the terminal run 
-```bash python3 main.py ```
+To train and evaluate the model, from the terminal run 
+```bash 
+python3 main.py
+```
 
 Also two robustness tests (i) Adversarial Perturbations and (ii) Random Sensors Dropout can be performed from the terminal using for an example
 ```bash python3 adversarial_perturbations_test.py``` 
-</pre>
 
