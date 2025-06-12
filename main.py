@@ -4,7 +4,6 @@ import numpy as np
 from src.train import train_model
 from src.evaluate import evaluate_model, model
 from src.preprocessing import load_data
-from src.model import transformer
 
 def main():
     # Train the model
