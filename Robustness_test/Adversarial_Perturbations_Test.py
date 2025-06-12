@@ -44,7 +44,7 @@ def split_data(X, y, test_size=0.2, val_size=0.1):
 
 
 # Load the dataset
-filepath = 'data/transformed_data.csv'  # Update to your dataset path
+filepath = 'data/pems.csv'  # Update to your dataset path
 data = load_data(filepath)
 
 input_steps = 24
