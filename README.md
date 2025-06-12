@@ -15,5 +15,7 @@ python3 main.py
 ```
 
 Also two robustness tests (i) Adversarial Perturbations and (ii) Random Sensors Dropout can be performed from the terminal using for an example
-```bash python3 adversarial_perturbations_test.py``` 
+```bash 
+python3 adversarial_perturbations_test.py
+``` 
 
