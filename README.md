@@ -9,7 +9,7 @@ Data augmentation was only applied to transformed_data.csv; PEMS-BAY and METR-LA
 
 
 # Usage
-From the terminal run 'python3 main.py'
+From the terminal run 'python3 main.py'.
 Also two robustness tests (i) Adversarial Perturbations and (ii) Random Sensors Dropout can be performed from the terminal using for an example 'python3 ./Robustness_test/Adversarial_Perturbations_Test.py' 
 
 
