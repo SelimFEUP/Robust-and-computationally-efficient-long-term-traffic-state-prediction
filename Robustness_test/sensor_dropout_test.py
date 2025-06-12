@@ -24,5 +24,5 @@ def sensor_dropout_test(model, X_test_scaled, y_test_scaled, p_drop=0.1):
     print(f"With {p_drop*100:.0f}% sensor dropout prob: MAE={mae:.4f}, RMSE={rmse:.4f}")
     return mae, rmse
     
-# model, X_test_scaled, y_test_scaled are the saved model, X_test and y_test of your dataset 
+# model, X_test_scaled, y_test_scaled are the saved model, X_test and y_test of your dataset. you also need to define the model as was done in Adversarial_Perturbations_test.py file. 
 sensor_dropout_test(model, X_test_scaled, y_test_scaled)
