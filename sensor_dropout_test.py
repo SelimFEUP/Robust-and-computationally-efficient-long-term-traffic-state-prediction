@@ -2,18 +2,9 @@ import numpy as np
 from src.evaluate import model, evaluate_model
 from src.preprocessing import load_data
 
+# p_drop: Probability of dropping each sensor (0.1 = 10% chance per sensor) change it's values such as 0.2, 0.3,.. to check MAE and RMSE scores
 def sensor_dropout_test(model, X_test_scaled, y_test_scaled, p_drop=0.1):
-    """
-    Test model robustness to random sensor dropout using scaled data.
-    
-    Args:
-        model: Trained model (expects scaled input)
-        X_test_scaled: Scaled test features (shape: [samples, timesteps, sensors])
-        y_test_scaled: Scaled test labels
-        p_drop: Probability of dropping each sensor (0.1 = 10% chance per sensor) change it's values such as 0.2, 0.3,..
-        to check MAE and RMSE scores
-    """
-    # Create a broadcastable mask for sensors (last dimension)
+    # Create a broadcastable mask for sensors
     mask = np.random.choice(
         [0, 1], 
         size=(1, 1, X_test_scaled.shape[-1]),  # Preserve dims for broadcasting
