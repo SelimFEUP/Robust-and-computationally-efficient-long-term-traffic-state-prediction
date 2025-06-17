@@ -284,16 +284,8 @@ model.compile(loss=custom_loss,optimizer=tf.keras.optimizers.Nadam(learning_rate
 model.load_weights('models/model.keras')
 
 # Adversarial Test
+# epsilon: Perturbation magnitude
 def adversarial_test(model, X_test, y_test, epsilon=0.10):
-    """
-    Tests model robustness against adversarial perturbations.
-    
-    Args:
-        model: Trained Keras model
-        X_test: Test features (shape: [samples, timesteps, features])
-        y_test: Corresponding test labels (shape: [samples, timesteps, features])
-        epsilon: Perturbation magnitude
-    """
     # Convert to tensors
     X_test_tensor = tf.convert_to_tensor(X_test, dtype=tf.float32)
     y_test_tensor = tf.convert_to_tensor(y_test, dtype=tf.float32)
