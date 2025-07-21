@@ -18,7 +18,7 @@ def preprocess_data(data):
     data_scaled = scaler.fit_transform(data)
     return data_scaled, scaler
 
-# Create windows for input-output pairs (for multi-step time series forecasting)
+# Create windows for input-output pairs (for multi-step predictions)
 def create_sequences(data, input_steps, output_steps, stride=1):
     X, y = [], []
     for i in range(0, len(data) - input_steps - output_steps, stride):  # Note: stride
@@ -39,10 +39,10 @@ data = load_data(filepath)
 
 input_steps = 24
 output_steps = 24
-# Create sequences for multi-step forecasting
+# Create sequences
 X, y = create_sequences(data, input_steps=input_steps, output_steps=output_steps)
     
-# Split the data into training, validation, and test sets
+# Split the data
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
     
 scaler = MinMaxScaler(feature_range=(0, 1))
