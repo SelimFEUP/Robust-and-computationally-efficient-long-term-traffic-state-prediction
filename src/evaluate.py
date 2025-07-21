@@ -153,17 +153,14 @@ def encoder_layer(units, d_model, num_heads, dropout, name="encoder_layer"):
     return tf.keras.Model(inputs=[inputs, padding_mask], outputs=outputs, name=name)
 
 # Dynamic Feature Embedding
+# embedding_dim (int): Dimensionality of the embedding space
+# activation (str or callable, optional): Activation function to use. Defaults to None (linear activation)
+# use_dropout (bool): Whether to apply dropout. Defaults to False
+# dropout_rate (float): Dropout rate if dropout is enabled. Defaults to 0.1
+# use_batch_norm (bool): Whether to use batch normalization. Defaults to False
+# num_layers (int): Number of dense layers to use. Defaults to 1
 class DynamicFeatureEmbedding(tf.keras.layers.Layer):
     def __init__(self, embedding_dim, activation=None, use_dropout=False, dropout_rate=0.1, use_batch_norm=False, num_layers=1, **kwargs):
-        """
-        Args:
-            embedding_dim (int): Dimensionality of the embedding space.
-            activation (str or callable, optional): Activation function to use. Defaults to None (linear activation).
-            use_dropout (bool): Whether to apply dropout. Defaults to False.
-            dropout_rate (float): Dropout rate if dropout is enabled. Defaults to 0.1.
-            use_batch_norm (bool): Whether to use batch normalization. Defaults to False.
-            num_layers (int): Number of dense layers to use. Defaults to 1.
-        """
         super(DynamicFeatureEmbedding, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
         self.activation = tf.keras.activations.get(activation)
@@ -202,12 +199,12 @@ lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
 
 # TCN Block
 def temporal_block(x, num_filters, kernel_size, dilation_rate, dropout):
-    skip_connection = x  # Preserve input for the residual connection
+    skip_connection = x  # to preserve input for the residual connection
     out = Conv1D(filters=num_filters, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='causal')(x)
     out = BatchNormalization()(out)
     out = Activation('relu')(out)
     out = SpatialDropout1D(dropout)(out)
-    # Add the residual connection
+    # Add residual connection
     if skip_connection.shape[-1] != num_filters:
         skip_connection = Conv1D(filters=num_filters, kernel_size=1, padding='same')(skip_connection)
     out = Add()([out, skip_connection])  # Combine output and skip connection
@@ -223,7 +220,7 @@ class DeepProjectionLayer(tf.keras.layers.Layer):
 
         # Components of the projection
         self.dense1 = Dense(num_hidden, activation='relu')  # Nonlinear transformation
-        self.gate = Dense(num_hidden, activation='sigmoid')  # Gating mechanism matches dense1 output size
+        self.gate = Dense(num_hidden, activation='sigmoid')  # Gating mechanism
         self.scale = tf.Variable(initial_value=tf.sqrt(tf.cast(d_model, tf.float32)), trainable=True, name="learnable_scale")
         self.dense2 = Dense(d_model, activation=None)  # Linear projection back to d_model
         self.input_projection = Dense(d_model, activation=None)  # Input projection for residual
@@ -235,7 +232,7 @@ class DeepProjectionLayer(tf.keras.layers.Layer):
 
         # Apply gating mechanism
         gate = self.gate(inputs)
-        x = x * gate  # Element-wise gating (now dimensions match)
+        x = x * gate  # Element-wise gating
 
         # Linear projection to d_model
         x = self.dense2(x)
@@ -264,14 +261,10 @@ def transformer(time_steps, d_model, num_heads, num_layers, units, dropout, outp
     x = tf.keras.layers.Concatenate(axis=-1)([inputs, dynamic_features])
     
     # Projection with learnable scaling factor
-    #projection = tf.keras.layers.Dense(d_model, activation='linear')(x)
     projection = DeepProjectionLayer(d_model=d_model, num_hidden=d_model * 2)(x)
-    #scale = tf.Variable(tf.sqrt(tf.cast(d_model, tf.float32)), trainable=True, name="learnable_scale")
-    #projection *= scale  # Apply the learnable scaling factor
+    
     projection *= tf.math.sqrt(tf.cast(d_model, tf.float32))
-    projection = SpatioTemporalPositionalEncoding(
-        num_sensors=num_features, d_model=d_model, time_steps=time_steps
-    )(projection)
+    projection = SpatioTemporalPositionalEncoding(num_sensors=num_features, d_model=d_model, time_steps=time_steps)(projection)
     projection = tf.keras.layers.LayerNormalization()(projection)
     x = tf.keras.layers.Dropout(rate=dropout)(projection)
 
