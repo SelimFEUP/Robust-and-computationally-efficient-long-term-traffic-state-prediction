@@ -31,11 +31,7 @@ def custom_loss(y_true, y_pred):
     mae = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred)
     return mse + 0.5 * mae
     
-lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
-    initial_learning_rate=1e-3, 
-    first_decay_steps=1000,
-    alpha=1e-4
-)
+# lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(initial_learning_rate=1e-3,first_decay_steps=1000,alpha=1e-4)
 
 def train_model():
     X_train_scaled, y_train_scaled, X_val_scaled, y_val_scaled, X_test_scaled, y_test_scaled = load_data()
